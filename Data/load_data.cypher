@@ -1,71 +1,79 @@
-CREATE CONSTRAINT ON (i:Item) ASSERT i.StockCode IS UNIQUE;
-CREATE CONSTRAINT ON (c:Customer) ASSERT c.CustomerID IS UNIQUE;
-CREATE CONSTRAINT ON (t:Transaction) ASSERT t.TransactionID IS UNIQUE;
-CREATE CONSTRAINT ON (c:Category) ASSERT c.Category IS UNIQUE;
-CREATE CONSTRAINT ON (c:Country) ASSERT c.Name IS UNIQUE;
+CALL apoc.schema.assert({}, {
+    Item: ["stockCode"],
+    Customer: ["customerID"],
+    Transaction: ["transactionID"],
+    Category: ["category"],
+    Country: ["name"]
+}) YIELD label;
+
+MATCH (n) DETACH DELETE n;
 
 LOAD CSV WITH HEADERS FROM "file:///UniqueCategories.csv" AS row 
 WITH row.ITEMCATEGORY as ItemCategory
-MERGE (c:Category{Category:ItemCategory})
+MERGE (c:Category {category:ItemCategory})
 RETURN COUNT (c);
 
 LOAD CSV WITH HEADERS FROM "file:///UniqueItems.csv" AS row
-WITH toInteger(row.StockCode) as StockCode, row.Description as Description where StockCode is not null
-MERGE (i:Item{StockCode: StockCode, Description:Description})
+WITH toInteger(row.StockCode) as StockCode,
+  row.Description as Description where StockCode is not null
+MERGE (i:Item {stockCode: StockCode, description:Description})
 RETURN COUNT (i);
 
 LOAD CSV WITH HEADERS FROM "file:///UniqueCountries.csv" AS row
 WITH row.Country as CountryName
-MERGE (c:Country{Country:CountryName})
+MERGE (c:Country {country:CountryName})
 RETURN COUNT (c);
 
 LOAD CSV WITH HEADERS FROM "file:///UniqueHouseholds.csv" AS row
 WITH toInteger(row.CustomerID) as CustomerID
-MERGE (c:Customer{CustomerID:CustomerID})
+MERGE (c:Customer {customerID:CustomerID})
 RETURN COUNT (c);
 
 LOAD CSV WITH HEADERS FROM "file:///UniqueTransactions.csv" AS row
-WITH toInteger(row.Transaction_ID) as TransactionID, row.InvoiceDate as InvoiceDate, toInteger(row.epochtime) as EpochTime
-MERGE (t:Transaction{TransactionID:TransactionID, InvoiceDate:InvoiceDate, EpochTime:EpochTime})
+WITH toInteger(row.Transaction_ID) as TransactionID,
+  row.InvoiceDate as InvoiceDate,
+  toInteger(row.epochtime) as EpochTime
+MERGE (t:Transaction {transactionID:TransactionID, invoiceDate:InvoiceDate, epochTime:EpochTime})
 RETURN COUNT (t);
 
 //Add relationships
-:auto
 USING PERIODIC COMMIT 500
 LOAD CSV WITH HEADERS FROM "file:///item-category.csv" as row
 WITH toInteger (row.StockCode) as StockCode, row.CATEGORY as Category
-MATCH (i:Item{StockCode:StockCode})
-MATCH (c:Category{Category:Category})
+MATCH (i:Item {stockCode:StockCode})
+MATCH (c:Category {category:Category})
 MERGE (i)-[:TYPE]->(c);
 
-:auto
 USING PERIODIC COMMIT 500
 LOAD CSV WITH HEADERS FROM "file:///household-transaction.csv" as row
-WITH toInteger(row.CustomerID) as CustomerID, toInteger(row.Transaction_ID) as TransactionID
-MATCH (c:Customer{CustomerID:CustomerID})
-MATCH (t:Transaction{TransactionID:TransactionID})
+WITH toInteger(row.CustomerID) as CustomerID,
+  toInteger(row.Transaction_ID) as TransactionID
+MATCH (c:Customer {customerID:CustomerID})
+MATCH (t:Transaction {transactionID:TransactionID})
 MERGE (c)-[:MADE_TRANSACTION]->(t);
 
-:auto
 USING PERIODIC COMMIT 500
 LOAD CSV WITH HEADERS FROM "file:///household-country.csv" as row
 WITH toInteger(row.CustomerID) as CustomerID, row.Country as Country
-MATCH (c:Customer{CustomerID:CustomerID})
-MATCH (c2:Country{Country:Country})
+MATCH (c:Customer {customerID:CustomerID})
+MATCH (c2:Country {country:Country})
 MERGE (c)-[:FROM]->(c2);
 
-:auto
 USING PERIODIC COMMIT 500
 LOAD CSV WITH HEADERS FROM "file:///customer-item.csv" as row
-WITH toInteger(row.NumberPurchased) as NumberPurchase, toInteger(row.CustomerID) as CustomerID, tointeger (row.StockCode) as StockCode
-MATCH (c:Customer{CustomerID:CustomerID})
-MATCH (i:Item {StockCode:StockCode})
-MERGE (c)-[:BOUGHT{Quantity:NumberPurchase}]->(i);
+WITH toInteger(row.NumberPurchased) as NumberPurchase,
+  toInteger(row.CustomerID) as CustomerID,
+  tointeger (row.StockCode) as StockCode
+MATCH (c:Customer {customerID:CustomerID})
+MATCH (i:Item {stockCode:StockCode})
+MERGE (c)-[:BOUGHT {quantity:NumberPurchase}]->(i);
 
-:auto
 USING PERIODIC COMMIT 500
 LOAD CSV WITH HEADERS FROM "file:///transaction-item.csv" as row
-WITH tointeger (row.StockCode) as StockCode, toFloat(row.Price) as Price, toInteger(row.Transaction_ID) as TransactionID, toInteger(row.Quantity) as Quantity
-MATCH (i:Item{StockCode:StockCode})
-MATCH (t:Transaction{TransactionID:TransactionID})
-MERGE (t)-[:CONTAINS{Quantity:Quantity, Price:Price}]->(i);
+WITH tointeger (row.StockCode) as StockCode,
+  toFloat(row.Price) as Price,
+  toInteger(row.Transaction_ID) as TransactionID,
+  toInteger(row.Quantity) as Quantity
+MATCH (i:Item {stockCode:StockCode})
+MATCH (t:Transaction {transactionID:TransactionID})
+MERGE (t)-[:CONTAINS {quantity:Quantity, price:Price}]->(i);
